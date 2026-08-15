@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מריו 2D פשוט ב-Canvas</title>
+    <title>מריו 2D - עולם מורחב וגרביטציה נמוכה</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color: #5c94fc; /* צבע שמיים מריו */
+            background-color: #5c94fc;
             font-family: Arial, sans-serif;
         }
 
@@ -78,17 +78,16 @@
         const finalScore = document.getElementById('finalScore');
         const restartBtn = document.getElementById('restartBtn');
 
-        // הגדרת גודל הקנבס למסך מלא
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // --- הגדרות משחק ---
-        const GRAVITY = 0.8;
-        const MARIO_SPEED = 5;
-        const JUMP_FORCE = -15;
-        const TILE_SIZE = 40; // גודל קוביה בסיסי
+        // --- הגדרות משחק (עודכנו לגרביטציה נמוכה ועולם ענק) ---
+        const GRAVITY = 0.3; // גרביטציה נמוכה במיוד
+        const MARIO_SPEED = 6;
+        const JUMP_FORCE = -12;
+        const TILE_SIZE = 40;
+        const WORLD_WIDTH = 4000; // הגדלת רוחב העולם
 
-        // --- משתני מדינה (State) ---
         let keys = {};
         let score = 0;
         let isGameOver = false;
@@ -96,8 +95,7 @@
         let coins = [];
         let enemies = [];
         let mario;
-
-        // --- מחלקות (Classes) ---
+        let cameraX = 0;
 
         class Player {
             constructor(x, y, width, height) {
@@ -108,48 +106,41 @@
                 this.velX = 0;
                 this.velY = 0;
                 this.onGround = false;
-                this.color = '#e74c3c'; // אדום מריו
+                this.color = '#e74c3c';
             }
 
             draw() {
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                // כובע פשוט
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
                 ctx.fillStyle = '#c0392b';
-                ctx.fillRect(this.x, this.y, this.width, this.height * 0.3);
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height * 0.3);
             }
 
             update() {
-                // תנועה אופקית
                 if (keys['ArrowRight'] || keys['d']) this.velX = MARIO_SPEED;
                 else if (keys['ArrowLeft'] || keys['a']) this.velX = -MARIO_SPEED;
                 else this.velX = 0;
 
-                // קפיצה
                 if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && this.onGround) {
                     this.velY = JUMP_FORCE;
                     this.onGround = false;
                 }
 
-                // החלת כוח כבידה
                 this.velY += GRAVITY;
 
-                // עדכון מיקום
                 this.x += this.velX;
                 this.y += this.velY;
 
-                // התנגשות עם גבולות המסך (רצפה)
                 if (this.y + this.height > canvas.height) {
                     this.y = canvas.height - this.height;
                     this.velY = 0;
                     this.onGround = true;
                 }
 
-                // מניעת יציאה מהצדדים
                 if (this.x < 0) this.x = 0;
-                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.x + this.width > WORLD_WIDTH) this.x = WORLD_WIDTH - this.width;
 
-                this.onGround = false; // איפוס, יתעדכן בהתנגשות עם פלטפורמה
+                this.onGround = false;
             }
         }
 
@@ -164,10 +155,9 @@
 
             draw() {
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                // קו מתאר
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
                 ctx.strokeStyle = '#2c3e50';
-                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.strokeRect(this.x - cameraX, this.y, this.width, this.height);
             }
         }
 
@@ -178,45 +168,42 @@
                 this.width = TILE_SIZE * 0.6;
                 this.height = TILE_SIZE * 0.8;
                 this.collected = false;
-                this.color = '#f1c40f'; // זהב
+                this.color = '#f1c40f';
             }
 
             draw() {
                 if (this.collected) return;
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                // אפקט ברק פשוט
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.fillRect(this.x + this.width * 0.2, this.y + this.height * 0.2, this.width * 0.2, this.height * 0.2);
+                ctx.fillRect(this.x - cameraX + this.width * 0.2, this.y + this.height * 0.2, this.width * 0.2, this.height * 0.2);
             }
         }
 
         class Enemy {
-            constructor(x, y, width, height) {
+            constructor(x, y, width, height, minX, maxX) {
                 this.x = x;
                 this.y = y;
                 this.width = width;
                 this.height = height;
-                this.velX = 2; // מהירות אויב
-                this.color = '#c0392b'; // אדום כהה
+                this.velX = 2;
+                this.color = '#c0392b';
+                this.minX = minX;
+                this.maxX = maxX;
             }
 
             draw() {
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
             }
 
             update() {
                 this.x += this.velX;
-
-                // התנגשות עם גבולות המסך (צדדים) - פטרול
-                if (this.x < 0 || this.x + this.width > canvas.width) {
+                if (this.x < this.minX || this.x + this.width > this.maxX) {
                     this.velX = -this.velX;
                 }
             }
         }
-
-        // --- פונקציות עזר (Helper Functions) ---
 
         function checkCollision(obj1, obj2) {
             return (
@@ -228,7 +215,6 @@
         }
 
         function resolvePlatformCollisions(player, platform) {
-            // התנגשות מלמעלה (נחיתה)
             if (player.velY > 0 &&
                 player.y + player.height > platform.y &&
                 player.y + player.height - player.velY <= platform.y) {
@@ -236,86 +222,84 @@
                 player.velY = 0;
                 player.onGround = true;
             }
-            // התנגשות מלמטה (ראש בבלוק)
             else if (player.velY < 0 &&
                      player.y < platform.y + platform.height &&
                      player.y - player.velY >= platform.y + platform.height) {
                 player.y = platform.y + platform.height;
                 player.velY = 0;
             }
-            // התנגשות מהצדדים
             else if (player.x < platform.x + platform.width &&
                      player.x + player.width > platform.x) {
-                // התנגשות מימין
-                if (player.velX > 0) {
-                    player.x = platform.x - player.width;
-                }
-                // התנגשות משמאל
-                else if (player.velX < 0) {
-                    player.x = platform.x + platform.width;
-                }
+                if (player.velX > 0) player.x = platform.x - player.width;
+                else if (player.velX < 0) player.x = platform.x + platform.width;
                 player.velX = 0;
             }
         }
 
-        // --- פונקציות ליבה של המשחק ---
-
         function initGame() {
             score = 0;
+            cameraX = 0;
             isGameOver = false;
             uiScore.textContent = score;
             gameOverScreen.style.visibility = 'hidden';
 
-            // יצירת השחקן
             mario = new Player(TILE_SIZE * 2, canvas.height - TILE_SIZE * 3, TILE_SIZE, TILE_SIZE * 1.5);
 
-            // יצירת פלטפורמות (מפות בסיסית)
+            // בניית עולם מורחב עם פלטפורמות, מטבעות ואויבים לאורך 4000 פיקסלים
             platforms = [
-                // רצפה ראשית
-                new Platform(0, canvas.height - TILE_SIZE, canvas.width, TILE_SIZE, '#27ae60'),
-                // פלטפורמות באוויר
-                new Platform(TILE_SIZE * 5, canvas.height - TILE_SIZE * 4, TILE_SIZE * 3, TILE_SIZE),
-                new Platform(TILE_SIZE * 10, canvas.height - TILE_SIZE * 6, TILE_SIZE * 4, TILE_SIZE),
-                new Platform(TILE_SIZE * 16, canvas.height - TILE_SIZE * 4, TILE_SIZE * 2, TILE_SIZE),
-                new Platform(TILE_SIZE * 21, canvas.height - TILE_SIZE * 7, TILE_SIZE * 5, TILE_SIZE),
+                new Platform(0, canvas.height - TILE_SIZE, WORLD_WIDTH, TILE_SIZE, '#27ae60'),
+                new Platform(300, canvas.height - TILE_SIZE * 4, 200, TILE_SIZE),
+                new Platform(600, canvas.height - TILE_SIZE * 7, 250, TILE_SIZE),
+                new Platform(950, canvas.height - TILE_SIZE * 5, 180, TILE_SIZE),
+                new Platform(1300, canvas.height - TILE_SIZE * 8, 300, TILE_SIZE),
+                new Platform(1700, canvas.height - TILE_SIZE * 4, 200, TILE_SIZE),
+                new Platform(2000, canvas.height - TILE_SIZE * 6, 250, TILE_SIZE),
+                new Platform(2400, canvas.height - TILE_SIZE * 9, 300, TILE_SIZE),
+                new Platform(2850, canvas.height - TILE_SIZE * 5, 200, TILE_SIZE),
+                new Platform(3200, canvas.height - TILE_SIZE * 7, 400, TILE_SIZE),
             ];
 
-            // יצירת מטבעות
             coins = [
-                new Coin(TILE_SIZE * 6, canvas.height - TILE_SIZE * 5.5),
-                new Coin(TILE_SIZE * 11, canvas.height - TILE_SIZE * 7.5),
-                new Coin(TILE_SIZE * 12, canvas.height - TILE_SIZE * 7.5),
-                new Coin(TILE_SIZE * 17, canvas.height - TILE_SIZE * 5.5),
-                new Coin(TILE_SIZE * 23, canvas.height - TILE_SIZE * 8.5),
+                new Coin(350, canvas.height - TILE_SIZE * 5.5),
+                new Coin(650, canvas.height - TILE_SIZE * 8.5),
+                new Coin(700, canvas.height - TILE_SIZE * 8.5),
+                new Coin(1350, canvas.height - TILE_SIZE * 9.5),
+                new Coin(1400, canvas.height - TILE_SIZE * 9.5),
+                new Coin(2050, canvas.height - TILE_SIZE * 7.5),
+                new Coin(2500, canvas.height - TILE_SIZE * 10.5),
+                new Coin(3300, canvas.height - TILE_SIZE * 8.5),
             ];
 
-            // יצירת אויבים
             enemies = [
-                new Enemy(TILE_SIZE * 12, canvas.height - TILE_SIZE * 2, TILE_SIZE, TILE_SIZE),
-                new Enemy(TILE_SIZE * 22, canvas.height - TILE_SIZE * 8, TILE_SIZE, TILE_SIZE),
+                new Enemy(500, canvas.height - TILE_SIZE * 2, TILE_SIZE, TILE_SIZE, 400, 800),
+                new Enemy(1350, canvas.height - TILE_SIZE * 9, TILE_SIZE, TILE_SIZE, 1300, 1550),
+                new Enemy(2100, canvas.height - TILE_SIZE * 2, TILE_SIZE, TILE_SIZE, 1900, 2300),
+                new Enemy(3250, canvas.height - TILE_SIZE * 8, TILE_SIZE, TILE_SIZE, 3200, 3550),
             ];
+        }
+
+        function updateCamera() {
+            // המצלמה ממקמת את מאריו במרכז המסך
+            cameraX = mario.x - canvas.width / 2 + mario.width / 2;
+            if (cameraX < 0) cameraX = 0;
+            if (cameraX > WORLD_WIDTH - canvas.width) cameraX = WORLD_WIDTH - canvas.width;
         }
 
         function gameLoop() {
             if (isGameOver) return;
 
-            // 1. ניקוי המסך
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 2. עדכון אובייקטים
             mario.update();
             enemies.forEach(enemy => enemy.update());
+            updateCamera();
 
-            // 3. טיפול בהתנגשויות
-
-            // מריו עם פלטפורמות
             platforms.forEach(platform => {
                 if (checkCollision(mario, platform)) {
                     resolvePlatformCollisions(mario, platform);
                 }
             });
 
-            // מריו עם מטבעות
             coins.forEach(coin => {
                 if (!coin.collected && checkCollision(mario, coin)) {
                     coin.collected = true;
@@ -324,30 +308,24 @@
                 }
             });
 
-            // מריו עם אויבים (פגיעה = משחק נגמר)
             enemies.forEach(enemy => {
                 if (checkCollision(mario, enemy)) {
-                    // בדיקה אם מאריו נוחת על האויב מלמעלה
                     if (mario.velY > 0 && mario.y + mario.height - mario.velY <= enemy.y) {
-                        // האויב מובס (מוסר מהמערך)
                         enemies = enemies.filter(e => e !== enemy);
-                        mario.velY = JUMP_FORCE * 0.6; // קפיצה קטנה לאחר הבסה
+                        mario.velY = JUMP_FORCE * 0.6;
                         score += 200;
                         uiScore.textContent = score;
                     } else {
-                        // פגיעה רגילה = משחק נגמר
                         endGame();
                     }
                 }
             });
 
-            // 4. ציור אובייקטים
             platforms.forEach(platform => platform.draw());
             coins.forEach(coin => coin.draw());
             enemies.forEach(enemy => enemy.draw());
             mario.draw();
 
-            // 5. בקשה לפריים הבא
             requestAnimationFrame(gameLoop);
         }
 
@@ -357,16 +335,12 @@
             gameOverScreen.style.visibility = 'visible';
         }
 
-        // --- מאזיני אירועים (Event Listeners) ---
-
         window.addEventListener('keydown', e => keys[e.key] = true);
         window.addEventListener('keyup', e => keys[e.key] = false);
 
-        // התאמת גודל הקנבס בשינוי גודל חלון
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            // אתחול מחדש נדרש כדי למקם את הפלטפורמות נכון
             initGame();
         });
 
@@ -375,10 +349,8 @@
             gameLoop();
         });
 
-        // --- התחלת המשחק ---
         initGame();
         gameLoop();
-
     </script>
 </body>
 </html>
